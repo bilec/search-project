@@ -34,7 +34,7 @@ instance ToJSON WebPageJson
 data WebPageInfoJson = 
   WebPageInfo {
     urlLink :: T.Text,
-    textContentWords :: [T.Text],
+    textContentWords :: [(T.Text, Int)],
     links :: [T.Text]
   } deriving (Show, Generic)
 
@@ -73,8 +73,8 @@ isCorrectUrl url = T.isPrefixOf "http://" url || T.isPrefixOf "https://" url
 extractLinks :: [Tag T.Text] -> [T.Text]
 extractLinks tags = uniq (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
 
-processJson :: String -> IO ()
-processJson json = 
+processJson :: String -> String -> IO ()
+processJson json fileName = 
   do
     let jsonPacked = BB.pack json
     let webPageJsonMaybe = decode jsonPacked :: Maybe WebPageJson
@@ -96,19 +96,28 @@ processJson json =
               let body = onlyBody tags
               let bodyWithoutScriptAndStyle = dropScriptAndStyle body
 
-              let bodyWords = T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
+              let bodyWords = group $ sort $ T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
+              let bodyWordsWithOccurrence = map (\x -> (head x, length x)) bodyWords
               let urlLinks = extractLinks bodyWithoutScriptAndStyle
 
-              let webPageInfo = WebPageInfo urlLink bodyWords urlLinks
-              let webPageInfoEncoded = BB.unpack $ encode webPageInfo
+              let webPageInfo = WebPageInfo urlLink bodyWordsWithOccurrence urlLinks
+              let webPageInfoEncoded = encode webPageInfo
 
               setLocaleEncoding latin1
-              appendFile "webPageInfo.txt" webPageInfoEncoded
+              BB.appendFile fileName webPageInfoEncoded
+
+processAllJson :: [String] -> Integer -> Integer -> IO ()
+processAllJson [] _ _ = return ()
+processAllJson (x:xs) jsonCounter fileCounter = do
+  processJson x ("webPageInfo" ++ (show fileCounter) ++ ".txt")
+  if (jsonCounter + 1 > 100000) 
+    then processAllJson xs 0 (fileCounter + 1)
+    else processAllJson xs (jsonCounter + 1) fileCounter
 
 parse :: IO ()
 parse = do 
   jsonCollectionFile <- readFile "C:\\Users\\mbilka\\Desktop\\collection.jl"
   let jsonList = splitOn "\n" jsonCollectionFile
-  for_ jsonList processJson
+  processAllJson jsonList 0 0
 
   print "Finished parsing json/html!"
