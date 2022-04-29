@@ -1,6 +1,7 @@
 module Main where
 
 import ParseLib
+import PageRankLib
 
 main :: IO ()
-main = parse
+main = pageRank

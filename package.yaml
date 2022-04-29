@@ -27,6 +27,7 @@ dependencies:
 - Unique >= 0.4.7.9
 - tagsoup
 - aeson
+- containers # xperimental
 
 library:
   source-dirs: src

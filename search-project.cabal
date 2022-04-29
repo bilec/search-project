@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      PageRankLib
       ParseLib
   other-modules:
       Paths_search_project
@@ -35,6 +36,7 @@ library
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , split
     , tagsoup
     , text
@@ -52,6 +54,7 @@ executable search-project-exe
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , search-project
     , split
     , tagsoup
@@ -71,6 +74,7 @@ test-suite search-project-test
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , search-project
     , split
     , tagsoup
