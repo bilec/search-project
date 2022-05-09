@@ -10,12 +10,9 @@ import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
-import Data.Char (isSpace)
-
 import Data.List (nub, foldl1')
-import Data.List.Split (splitOn)
-import Data.Map (unionWith, fromList, member, size, Map, empty, filterWithKey, filter, elems, mapWithKey, map, keys)
-import Data.Maybe (isNothing, fromJust, fromMaybe)
+import Data.Map (unionWith, fromList, size, Map, empty, filterWithKey, filter, elems, mapWithKey, map, keys)
+import Data.Maybe (isNothing, fromJust)
 import GHC.Generics
 
 
@@ -29,6 +26,14 @@ data WebPageInfoJson =
 instance ToJSON WebPageInfoJson
 instance FromJSON WebPageInfoJson
 
+data PageRankJson =
+  PageRank {
+    url :: T.Text,
+    pageRankValue :: Double
+  } deriving (Show, Generic)
+
+instance ToJSON PageRankJson
+instance FromJSON PageRankJson
 
 tuppleToList :: (a, [a]) -> [a]
 tuppleToList (x, xx) = (x:xx)
@@ -99,6 +104,16 @@ solveSinks pageStats numberOfPages =
       sinkKeys = keys sinksUpdated
   in Data.Map.map (\v -> ( (nub(((fst v) ++ sinkKeys))) , (snd v) ) ) pageStatsSinkOutgoing
 
+pageRankFileName :: String
+pageRankFileName = "pageRank.txt"
+
+appendPageRankJsonsToFile :: [BB.ByteString] -> IO ()
+appendPageRankJsonsToFile [] = return ()
+appendPageRankJsonsToFile (x:xs) = do
+  BB.appendFile pageRankFileName "\n"
+  BB.appendFile pageRankFileName x
+  appendPageRankJsonsToFile xs
+
 pageRank :: IO ()
 pageRank = do
   jsonCollectionFile <- BB.readFile "webPageInfo0.txt"
@@ -110,7 +125,11 @@ pageRank = do
   let numberOfPages = numberOfAllPages' pagesStats
   let pageStatsSinkSolved = solveSinks pagesStats numberOfPages
 
-  let pr = calculatePageRanks pageStatsSinkSolved numberOfPages 10
-  print pr
+  let pageRanks = calculatePageRanks pageStatsSinkSolved numberOfPages 10
+  let pageRankJsons = elems $ mapWithKey (\k v -> PageRank k (third v)) pageRanks
+  let encodedPageRankJsons = Prelude.map (encode) pageRankJsons
 
-  print "pageRank"  
+  writeFile pageRankFileName ""
+  appendPageRankJsonsToFile encodedPageRankJsons
+
+  print "Finished calculating pageRank!"  
