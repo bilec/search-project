@@ -1,116 +1,116 @@
+{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
 
 module PageRankLib
     ( pageRank
     ) where
 
--- imported from: https://github.com/derekchiang/Haskell-Page-Rank
+import Data.Aeson (encode, decode, FromJSON, Object, ToJSON)
 
-import Data.Map (Map, empty, insert, insertWith, lookup, mapWithKey, member, size)
-import Data.Maybe (fromJust)
-import Debug.Trace (trace)
-import Prelude hiding (lookup)
-import Text.Printf (printf)
+import qualified Data.Text as T
+import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy.Char8 as BB
 
-type Node = Int
-type PRValue = Double
-type PageRank = Map Node PRValue
-type InboundEdges = Map Node [Node]
-type OutboundEdges = InboundEdges
+import Data.Char (isSpace)
+
+import Data.List (nub, foldl1')
+import Data.List.Split (splitOn)
+import Data.Map (unionWith, fromList, member, size, Map, empty, filterWithKey, filter, elems, mapWithKey, map, keys)
+import Data.Maybe (isNothing, fromJust, fromMaybe)
+import GHC.Generics
+
+
+data WebPageInfoJson = 
+  WebPageInfo {
+    urlLink :: T.Text,
+    textContentWords :: [(T.Text, Int)],
+    links :: [T.Text]
+  } deriving (Show, Generic)
+
+instance ToJSON WebPageInfoJson
+instance FromJSON WebPageInfoJson
+
+
+tuppleToList :: (a, [a]) -> [a]
+tuppleToList (x, xx) = (x:xx)
+
+isEmptyString :: BB.ByteString -> Bool
+isEmptyString x = x == ""
+
+processJson :: WebPageInfoJson -> Map T.Text ([T.Text], Int)
+processJson json = 
+  let link = urlLink json
+      words = textContentWords json
+      urls = links json
+      forElementInField = Prelude.map (\url -> (url, ([link], 0))) urls
+  in fromList ((link, ([], length words)):forElementInField)
+
+combinePair :: ([T.Text], Int) -> ([T.Text], Int) -> ([T.Text], Int)
+combinePair a b = (fst a ++ fst b, snd a + snd b)
+
+myUnionWith :: Map T.Text ([T.Text], Int) -> Map T.Text ([T.Text], Int) -> Map T.Text ([T.Text], Int)
+myUnionWith a b = unionWith (combinePair) a b
+
+numberOfAllPages :: [(T.Text, ([T.Text], Int))] -> Int
+numberOfAllPages xs = (size . fromList) xs
+
+numberOfAllPages' :: Map T.Text ([T.Text], Int) -> Int
+numberOfAllPages' xs = size xs
+
+decodeWebPageInfoJson :: BB.ByteString -> Maybe WebPageInfoJson
+decodeWebPageInfoJson x = decode x :: Maybe WebPageInfoJson
+
+first :: ([T.Text], Int, Double) -> [T.Text]
+first (a, _, _) = a
+
+second :: ([T.Text], Int, Double) -> Int
+second (_, b, _) = b
+
+third :: ([T.Text], Int, Double) -> Double
+third (_, _, c) = c
+
+calculateSinglePageRank ::  (T.Text, [T.Text]) -> Map T.Text ([T.Text], Int, Double) -> Int -> Double
+calculateSinglePageRank page pageRanks numberOfPages =
+  let dampingFactor = 0.85
+      firstPart = (1 - dampingFactor) / (fromIntegral numberOfPages)
+      pageUrl = fst page
+      pageIncoming = snd page
+      incomingPages = filterWithKey (\k _ -> elem k pageIncoming) pageRanks
+      incomingPagesElems = elems incomingPages
+      secondPartList = Prelude.map (\x -> (third x) / (fromIntegral (second x))) incomingPagesElems
+      secondPart = (foldl1' (+) secondPartList) * dampingFactor
+
+  in firstPart + secondPart
+
+calculatePageRanks :: Map T.Text ([T.Text], Int) -> Int -> Int -> Map T.Text ([T.Text], Int, Double)
+calculatePageRanks pageStats numberOfPages numberOfIterations =
+  let oldPageRanks = Data.Map.map (\x -> ((fst x), (snd x), (1.0 / (fromIntegral numberOfPages)))) pageStats
+  in calculatePageRanksIteration numberOfIterations numberOfPages oldPageRanks
+
+calculatePageRanksIteration :: Int -> Int -> Map T.Text ([T.Text], Int, Double) -> Map T.Text ([T.Text], Int, Double)
+calculatePageRanksIteration 0 _ oldPageRanks = oldPageRanks
+calculatePageRanksIteration iterations numberOfPages oldPageRanks = 
+  calculatePageRanksIteration (iterations - 1) numberOfPages (mapWithKey (\k v -> ((first v), (second v), (calculateSinglePageRank (k, (first v)) oldPageRanks numberOfPages))) oldPageRanks)
+
+solveSinks :: Map T.Text ([T.Text], Int) -> Int -> Map T.Text ([T.Text], Int)
+solveSinks pageStats numberOfPages =
+  let sinks = Data.Map.filter (\v -> (snd v) == 0) pageStats
+      sinksUpdated = Data.Map.map (\v -> ((fst v), numberOfPages)) sinks
+      pageStatsSinkOutgoing = unionWith (combinePair) sinksUpdated pageStats
+      sinkKeys = keys sinksUpdated
+  in Data.Map.map (\v -> ( (nub(((fst v) ++ sinkKeys))) , (snd v) ) ) pageStatsSinkOutgoing
 
 pageRank :: IO ()
 pageRank = do
-    putStrLn "How many iters?"
-    numIters <- getLine
-    f <- readFile "input.txt"
-    -- damping factor defaults to 0.85
-    writeFile "output.txt" $ show $ process f (read numIters :: Int) 0.85
+  jsonCollectionFile <- BB.readFile "webPageInfo0.txt"
+  let jsonList = Prelude.filter (not . isEmptyString) (BB.lines jsonCollectionFile)
+  let jsonDecodedListMaybe = Prelude.map (decodeWebPageInfoJson) jsonList
+  let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
+  let processedJsonList = Prelude.map (processJson) jsonDecodedList
+  let pagesStats = foldl (myUnionWith) empty processedJsonList
+  let numberOfPages = numberOfAllPages' pagesStats
+  let pageStatsSinkSolved = solveSinks pagesStats numberOfPages
 
-parseLine :: (InboundEdges, OutboundEdges, Node) -> String -> (InboundEdges, OutboundEdges, Node)
-parseLine (iEdges, oEdges, maxNode) line =
-    let ws = words line
-        (from, to) = (read $ ws !! 0, read $ ws !! 1)
-        in (insertWith plusNode to [from] iEdges,
-            insertWith plusNode from [to] oEdges,
-            max to (max maxNode from))
-    where
-        plusNode :: [Node] -> [Node] -> [Node]
-        plusNode new_node old_node =
-            new_node ++ old_node
+  let pr = calculatePageRanks pageStatsSinkSolved numberOfPages 10
+  print pr
 
-newPageRank :: Int -> PageRank
-newPageRank n =
-    let v :: Double; v = 1 / (fromIntegral n)
-        in go n v empty
-    where
-        go :: Int -> Double -> PageRank -> PageRank
-        go 0 _ pr = pr
-
-        go n v pr =
-            go (n-1) v $ insert (n-1) v pr
-
--- The goal of postProcess is to deal with the nodes that have no outbound
--- edges, in which case they should be treated like they have outbound edges
--- to every other node.
-postProcess :: (InboundEdges, OutboundEdges, Node) -> (InboundEdges, OutboundEdges)
-postProcess (iEdges, oEdges, maxNode) =
-    let numNodes = maxNode + 1
-        newIEdges = addAllNodes (numNodes-1) iEdges
-        in loop (numNodes-1) newIEdges oEdges
-
-    where
-        loop :: Int -> InboundEdges -> OutboundEdges -> (InboundEdges, OutboundEdges)
-        loop n iEdges oEdges
-            | n < 0 = (iEdges, oEdges)
-            | otherwise =
-                if member n oEdges then
-                    loop (n-1) iEdges oEdges
-                else
-                    let numNodes = maxNode + 1
-                        newOEdges = insert n (filter (/= n) [0..maxNode]) oEdges
-                        newIEdges = mapWithKey (\k v -> if k /= n then v ++ [n] else v) iEdges
-                        in loop (n-1) newIEdges newOEdges
-
-        -- This function makes sure that every node is a key in the InboundEdges map
-        addAllNodes :: Int -> InboundEdges -> InboundEdges
-        addAllNodes n iEdges
-            | n < 0 = iEdges
-            | otherwise =
-                addAllNodes (n-1) $ insertWith (\new old -> new ++ old) n [] iEdges
-
-
-parseGraph :: String -> (InboundEdges, OutboundEdges, PageRank)
-parseGraph input =
-    let ls = lines input
-        (iEdges, oEdges) = postProcess $ foldl parseLine (empty, empty, 0) ls
-        numNodes = size iEdges
-        in (iEdges, oEdges, newPageRank numNodes)
-
-
-loopProcess :: Int -> Double -> InboundEdges -> OutboundEdges -> PageRank -> PageRank
-loopProcess 0 _ _ _ pageRank = pageRank
-loopProcess n dampingFactor iEdges oEdges pageRank =
-    let newPageRank = loop' ((size pageRank) - 1) empty
-        in loopProcess (n-1) dampingFactor iEdges oEdges newPageRank
-
-    where
-        loop' :: Int -> PageRank -> PageRank
-        loop' n pr
-            | n < 0 = pr
-            | otherwise =
-                let inbounds = fromJust $ lookup n iEdges
-                    newPrValue = (+)
-                        ((1 - dampingFactor) / (fromIntegral $ size iEdges))
-                        (dampingFactor * (foldl calc 0 inbounds))
-                    in loop' (n-1) $ insert n newPrValue pr
-
-                where
-                    calc acc node =
-                        let outbounds = fromJust $ lookup node oEdges
-                            prValue = fromJust $ lookup node pageRank
-                            in acc + prValue / (fromIntegral $ length outbounds)
-
-
-process :: String -> Int -> Double -> PageRank
-process input numIters dampingFactor =
-    let (iEdges, oEdges, pageRank) = parseGraph input
-        in loopProcess numIters dampingFactor iEdges oEdges pageRank
+  print "pageRank"  
