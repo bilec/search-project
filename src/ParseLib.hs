@@ -9,8 +9,7 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
 import Data.List.Split (splitOn)
-import Data.List.Unique (uniq)
-import Data.List (findIndex, sort, group)
+import Data.List (findIndex, sort, group, nub)
 import Data.Foldable (for_)
 import Data.Aeson (encode, decode, FromJSON, ToJSON)
 import Data.Maybe (isNothing, fromJust)
@@ -71,7 +70,7 @@ isCorrectUrl :: T.Text -> Bool
 isCorrectUrl url = T.isPrefixOf "http://" url || T.isPrefixOf "https://" url
 
 extractLinks :: [Tag T.Text] -> [T.Text]
-extractLinks tags = uniq (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
+extractLinks tags = nub (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
 
 processJson :: String -> String -> IO ()
 processJson json fileName = 
@@ -104,6 +103,7 @@ processJson json fileName =
               let webPageInfoEncoded = encode webPageInfo
 
               setLocaleEncoding latin1
+              BB.appendFile fileName "\n"
               BB.appendFile fileName webPageInfoEncoded
 
 processAllJson :: [String] -> Integer -> Integer -> IO ()
