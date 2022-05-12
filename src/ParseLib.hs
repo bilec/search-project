@@ -12,14 +12,10 @@ import Data.List.Split (splitOn)
 import Data.List (findIndex, sort, group, nub)
 import Data.Foldable (for_)
 import Data.Aeson (encode, decode, FromJSON, ToJSON)
-import Data.Maybe (isNothing, fromJust)
+import Data.Maybe (isNothing, fromJust, Maybe(Nothing))
 import Data.Typeable (typeOf)
-
-import GHC.IO.Encoding (setLocaleEncoding, latin1)
 import GHC.Generics
-
 import Text.HTML.TagSoup (parseTags, innerText, sections, Tag, isTagOpenName, isTagCloseName, isTagText, fromAttrib)
-
 
 data WebPageJson =
   WebPageJson { 
@@ -39,6 +35,12 @@ data WebPageInfoJson =
 
 instance FromJSON WebPageInfoJson
 instance ToJSON WebPageInfoJson
+
+isEmptyString :: BB.ByteString -> Bool
+isEmptyString x = (x == "")
+
+decodeWebPageJson :: BB.ByteString -> Maybe WebPageJson
+decodeWebPageJson x = decode x :: Maybe WebPageJson
 
 checkBody :: [Tag T.Text] -> Bool
 checkBody tags = 
@@ -72,52 +74,36 @@ isCorrectUrl url = T.isPrefixOf "http://" url || T.isPrefixOf "https://" url
 extractLinks :: [Tag T.Text] -> [T.Text]
 extractLinks tags = nub (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
 
-processJson :: String -> String -> IO ()
-processJson json fileName = 
-  do
-    let jsonPacked = BB.pack json
-    let webPageJsonMaybe = decode jsonPacked :: Maybe WebPageJson
-
-    if (isNothing webPageJsonMaybe)
-    then return ()
+processJson :: WebPageJson -> Maybe WebPageInfoJson
+processJson webPageJson = do
+  let urlLink = url webPageJson
+  let content = html_content webPageJson
+  let contentTags = parseTags content
+  if (not $ checkBody contentTags)
+    then Nothing
     else 
       do
-        let webPageParsed = fromJust webPageJsonMaybe
-        let urlLink = url webPageParsed
+        let body = onlyBody contentTags
+        let bodyWithoutScriptAndStyle = dropScriptAndStyle body
 
-        let htmlContentText = html_content webPageParsed
-        let tags = parseTags htmlContentText
-
-        if (not $ checkBody tags)
-          then return ()
-          else 
-            do
-              let body = onlyBody tags
-              let bodyWithoutScriptAndStyle = dropScriptAndStyle body
-
-              let bodyWords = group $ sort $ T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
-              let bodyWordsWithOccurrence = map (\x -> (head x, length x)) bodyWords
-              let urlLinks = extractLinks bodyWithoutScriptAndStyle
-
-              let webPageInfo = WebPageInfo urlLink bodyWordsWithOccurrence urlLinks
-              let webPageInfoEncoded = encode webPageInfo
-
-              setLocaleEncoding latin1
-              BB.appendFile fileName "\n"
-              BB.appendFile fileName webPageInfoEncoded
-
-processAllJson :: [String] -> Integer -> Integer -> IO ()
-processAllJson [] _ _ = return ()
-processAllJson (x:xs) jsonCounter fileCounter = do
-  processJson x ("webPageInfo" ++ (show fileCounter) ++ ".txt")
-  if (jsonCounter + 1 > 100000) 
-    then processAllJson xs 0 (fileCounter + 1)
-    else processAllJson xs (jsonCounter + 1) fileCounter
+        let bodyWords = group $ sort $ T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
+        let bodyWordsWithOccurrence = map (\x -> (head x, length x)) bodyWords
+        let urlLinks = extractLinks bodyWithoutScriptAndStyle
+        Just $ WebPageInfo urlLink bodyWordsWithOccurrence urlLinks
 
 parse :: IO ()
 parse = do 
-  jsonCollectionFile <- readFile "C:\\Users\\mbilka\\Desktop\\collection.jl"
-  let jsonList = splitOn "\n" jsonCollectionFile
-  processAllJson jsonList 0 0
+  jsonCollectionFile <- BB.readFile "collection.jl"
+  let jsonList = Prelude.filter (not . isEmptyString) (BB.lines jsonCollectionFile)
+  let jsonDecodedListMaybe = Prelude.map (decodeWebPageJson) jsonList
+  let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
+  let processedJsonListMaybe = Prelude.map (processJson) jsonDecodedList
+  let processedJsonList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) processedJsonListMaybe)
+  let encodedJsonList = Prelude.map (Data.Aeson.encode) processedJsonList
+  let encodedJsonLinesList = Prelude.map (\x -> BB.cons '\n' x) encodedJsonList
+  let toWrite = foldr1 (<>) encodedJsonLinesList
+  
+  writeFile "webPageInfo.txt" ""
+  BB.writeFile "webPageInfo.txt" toWrite
 
   print "Finished parsing json/html!"
