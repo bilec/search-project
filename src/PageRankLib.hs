@@ -15,7 +15,6 @@ import Data.Map (unionWith, fromList, size, Map, empty, filterWithKey, filter, e
 import Data.Maybe (isNothing, fromJust)
 import GHC.Generics
 
-
 data WebPageInfoJson = 
   WebPageInfo {
     urlLink :: T.Text,
@@ -116,7 +115,7 @@ appendPageRankJsonsToFile (x:xs) = do
 
 pageRank :: IO ()
 pageRank = do
-  jsonCollectionFile <- BB.readFile "webPageInfo0.txt"
+  jsonCollectionFile <- BB.readFile "webPageInfo.txt"
   let jsonList = Prelude.filter (not . isEmptyString) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = Prelude.map (decodeWebPageInfoJson) jsonList
   let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
@@ -127,9 +126,11 @@ pageRank = do
 
   let pageRanks = calculatePageRanks pageStatsSinkSolved numberOfPages 10
   let pageRankJsons = elems $ mapWithKey (\k v -> PageRank k (third v)) pageRanks
-  let encodedPageRankJsons = Prelude.map (encode) pageRankJsons
+  let encodedPageRankJsons = Prelude.map (Data.Aeson.encode) pageRankJsons
+  let encodedPageRankLinesJsons = Prelude.map (\x -> BB.cons '\n' x) encodedPageRankJsons
+  let toWrite = foldr1 (<>) encodedPageRankLinesJsons
 
   writeFile pageRankFileName ""
-  appendPageRankJsonsToFile encodedPageRankJsons
+  BB.writeFile pageRankFileName toWrite
 
   print "Finished calculating pageRank!"  
