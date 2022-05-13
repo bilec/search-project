@@ -2,6 +2,7 @@ module Main where
 
 import ParseLib
 import PageRankLib
+import InvertedIndexLib
 
 main :: IO ()
 main = menu
@@ -18,7 +19,7 @@ menu = do
     case userInput of 
         "1" -> parse
         "2" -> pageRank
-        "3" -> print "3 selected"
+        "3" -> createInvertedIndex
         "4" -> print "4 selected"
         otherwise -> print "wrong option, try again"
     menu
