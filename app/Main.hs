@@ -1,5 +1,7 @@
 module Main where
 
+import Data.Time (getCurrentTime, diffUTCTime)
+
 import ParseLib
 import PageRankLib
 import InvertedIndexLib
@@ -17,9 +19,16 @@ menu = do
 
     userInput <- getLine
     case userInput of 
-        "1" -> parse
-        "2" -> pageRank
-        "3" -> createInvertedIndex
-        "4" -> print "4 selected"
+        "1" -> timeFunction parse
+        "2" -> timeFunction pageRank
+        "3" -> timeFunction createInvertedIndex
+        "4" -> timeFunction $ print "4 selected"
         otherwise -> print "wrong option, try again"
     menu
+
+timeFunction :: IO () -> IO ()
+timeFunction functionToTime = do
+    start <- getCurrentTime
+    functionToTime
+    end <- getCurrentTime
+    print (diffUTCTime end start)

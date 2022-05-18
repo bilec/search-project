@@ -28,6 +28,7 @@ dependencies:
 - tagsoup
 - aeson
 - containers # xperimental
+- time
 
 library:
   source-dirs: src

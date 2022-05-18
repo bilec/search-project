@@ -41,6 +41,7 @@ library
     , split
     , tagsoup
     , text
+    , time
   default-language: Haskell2010
 
 executable search-project-exe
@@ -60,6 +61,7 @@ executable search-project-exe
     , split
     , tagsoup
     , text
+    , time
   default-language: Haskell2010
 
 test-suite search-project-test
@@ -80,4 +82,5 @@ test-suite search-project-test
     , split
     , tagsoup
     , text
+    , time
   default-language: Haskell2010
