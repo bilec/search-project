@@ -58,11 +58,9 @@ urlsForWord word urlWordsTupleList =
   let containsWord = filter (\x -> elem word (snd x)) urlWordsTupleList
   in map (\x -> (fst x)) containsWord
 
-
-
 createInvertedIndex :: IO ()
 createInvertedIndex = do 
-  jsonCollectionFile <- BB.readFile "webPageInfo0.txt"
+  jsonCollectionFile <- BB.readFile "webPageInfo01.txt"
   let jsonList = filter (not . isEmptyString) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = map (decodeWebPageInfoJson) jsonList
   let jsonDecodedList = map (fromJust) (filter (not . isNothing) jsonDecodedListMaybe)
@@ -75,6 +73,6 @@ createInvertedIndex = do
   let invertedIndex = InvertedIndex wordsWithUrl
   let invertedIndexEncoded = encode invertedIndex
   setLocaleEncoding latin1
-  BB.appendFile "invertedIndex.txt" invertedIndexEncoded
+  BB.writeFile "invertedIndex.txt" invertedIndexEncoded
 
   
