@@ -35,8 +35,6 @@ data InvertedIndex =
 instance FromJSON InvertedIndex
 instance ToJSON InvertedIndex
 
-isEmptyString :: BB.ByteString -> Bool
-isEmptyString x = x == ""
 
 decodeWebPageInfoJson :: BB.ByteString -> Maybe WebPageInfoJson
 decodeWebPageInfoJson x = decode x :: Maybe WebPageInfoJson
@@ -60,8 +58,8 @@ urlsForWord word urlWordsTupleList =
 
 createInvertedIndex :: IO ()
 createInvertedIndex = do 
-  jsonCollectionFile <- BB.readFile "webPageInfo01.txt"
-  let jsonList = filter (not . isEmptyString) (BB.lines jsonCollectionFile)
+  jsonCollectionFile <- BB.readFile "webPageInfo.txt"
+  let jsonList = filter (not . BB.null) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = map (decodeWebPageInfoJson) jsonList
   let jsonDecodedList = map (fromJust) (filter (not . isNothing) jsonDecodedListMaybe)
   let links = map (getLinks) jsonDecodedList
@@ -73,6 +71,7 @@ createInvertedIndex = do
   let invertedIndex = InvertedIndex wordsWithUrl
   let invertedIndexEncoded = encode invertedIndex
   setLocaleEncoding latin1
+
   BB.writeFile "invertedIndex.txt" invertedIndexEncoded
 
-  
+  print "Finished creating inverted index!"

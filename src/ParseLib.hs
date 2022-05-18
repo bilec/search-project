@@ -36,8 +36,6 @@ data WebPageInfoJson =
 instance FromJSON WebPageInfoJson
 instance ToJSON WebPageInfoJson
 
-isEmptyString :: BB.ByteString -> Bool
-isEmptyString x = (x == "")
 
 decodeWebPageJson :: BB.ByteString -> Maybe WebPageJson
 decodeWebPageJson x = decode x :: Maybe WebPageJson
@@ -94,7 +92,7 @@ processJson webPageJson = do
 parse :: IO ()
 parse = do 
   jsonCollectionFile <- BB.readFile "collection.jl"
-  let jsonList = Prelude.filter (not . isEmptyString) (BB.lines jsonCollectionFile)
+  let jsonList = Prelude.filter (not . BB.null) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = Prelude.map (decodeWebPageJson) jsonList
   let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
   let processedJsonListMaybe = Prelude.map (processJson) jsonDecodedList
@@ -103,7 +101,6 @@ parse = do
   let encodedJsonLinesList = Prelude.map (\x -> BB.cons '\n' x) encodedJsonList
   let toWrite = foldr1 (<>) encodedJsonLinesList
   
-  writeFile "webPageInfo.txt" ""
   BB.writeFile "webPageInfo.txt" toWrite
 
   print "Finished parsing json/html!"

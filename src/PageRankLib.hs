@@ -37,9 +37,6 @@ instance FromJSON PageRankJson
 tuppleToList :: (a, [a]) -> [a]
 tuppleToList (x, xx) = (x:xx)
 
-isEmptyString :: BB.ByteString -> Bool
-isEmptyString x = x == ""
-
 processJson :: WebPageInfoJson -> Map T.Text ([T.Text], Int)
 processJson json = 
   let link = urlLink json
@@ -116,7 +113,7 @@ appendPageRankJsonsToFile (x:xs) = do
 pageRank :: IO ()
 pageRank = do
   jsonCollectionFile <- BB.readFile "webPageInfo.txt"
-  let jsonList = Prelude.filter (not . isEmptyString) (BB.lines jsonCollectionFile)
+  let jsonList = Prelude.filter (not . BB.null) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = Prelude.map (decodeWebPageInfoJson) jsonList
   let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
   let processedJsonList = Prelude.map (processJson) jsonDecodedList
@@ -130,7 +127,6 @@ pageRank = do
   let encodedPageRankLinesJsons = Prelude.map (\x -> BB.cons '\n' x) encodedPageRankJsons
   let toWrite = foldr1 (<>) encodedPageRankLinesJsons
 
-  writeFile pageRankFileName ""
   BB.writeFile pageRankFileName toWrite
 
   print "Finished calculating pageRank!"  
