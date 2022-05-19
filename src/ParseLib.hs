@@ -66,8 +66,22 @@ dropScriptAndStyle (a:b:c:xs) = if (isTagOpenAndTagTexAndTagClose "script" a b c
   then dropScriptAndStyle xs
   else a : dropScriptAndStyle (b:c:xs)
 
+isCorrectUrlHttpOrHttps :: T.Text -> T.Text -> Int -> Bool
+isCorrectUrlHttpOrHttps url protocol number = 
+  let prefix = T.isPrefixOf protocol url 
+      urlBody = T.drop number url
+      containsDot = T.isInfixOf "." urlBody
+      notOnlyDot = (not . T.null) (T.filter (/= '.') urlBody)
+  in prefix && containsDot && notOnlyDot
+
+isCorrectUrlHttp :: T.Text -> Bool
+isCorrectUrlHttp url = isCorrectUrlHttpOrHttps url "http://" 7
+
+isCorrectUrlHttps :: T.Text -> Bool
+isCorrectUrlHttps url = isCorrectUrlHttpOrHttps url "https://" 8
+
 isCorrectUrl :: T.Text -> Bool
-isCorrectUrl url = T.isPrefixOf "http://" url || T.isPrefixOf "https://" url
+isCorrectUrl url = (isCorrectUrlHttp url) || (isCorrectUrlHttps url)
 
 extractLinks :: [Tag T.Text] -> [T.Text]
 extractLinks tags = nub (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
