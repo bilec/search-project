@@ -5,6 +5,7 @@ import Data.Time (getCurrentTime, diffUTCTime)
 import ParseLib
 import PageRankLib
 import InvertedIndexLib
+import SearchLib
 
 main :: IO ()
 main = menu
@@ -22,7 +23,7 @@ menu = do
         "1" -> timeFunction parse
         "2" -> timeFunction pageRank
         "3" -> timeFunction createInvertedIndex
-        "4" -> timeFunction $ print "4 selected"
+        "4" -> timeFunction search
         otherwise -> print "wrong option, try again"
     menu
 

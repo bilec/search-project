@@ -28,6 +28,7 @@ library
       InvertedIndexLib
       PageRankLib
       ParseLib
+      SearchLib
   other-modules:
       Paths_search_project
   hs-source-dirs:
