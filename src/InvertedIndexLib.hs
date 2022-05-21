@@ -11,12 +11,11 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
 import GHC.IO.Encoding (setLocaleEncoding, latin1)
-import Data.List (nub, foldl1', foldr1)
-import Data.Map (unionWith, fromList, size, Map, empty, filterWithKey, filter, elems, mapWithKey, map, keys, toList, elemAt, singleton, findIndex, elemAt)
-import Data.Set (fromList, unions, union, toAscList, Set, singleton, empty, size, map, toList)
+import Data.List (foldr1)
+import Data.Map (unionWith, Map, keys, singleton)
+import Data.Set (union, Set, singleton, empty)
 import Data.Maybe (isNothing, fromJust)
-import Data.Typeable
-import GHC.Generics
+import GHC.Generics (Generic)
 
 data WebPageInfoJson = 
   WebPageInfo {

@@ -8,14 +8,11 @@ import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
-import Data.List.Split (splitOn)
 import Data.List (findIndex, sort, group, nub)
-import Data.Foldable (for_)
 import Data.Aeson (encode, decode, FromJSON, ToJSON)
 import Data.Maybe (isNothing, fromJust, Maybe(Nothing))
-import Data.Typeable (typeOf)
-import GHC.Generics
-import Text.HTML.TagSoup (parseTags, innerText, sections, Tag, isTagOpenName, isTagCloseName, isTagText, fromAttrib)
+import GHC.Generics (Generic)
+import Text.HTML.TagSoup (parseTags, innerText, Tag, isTagOpenName, isTagCloseName, isTagText, fromAttrib)
 
 data WebPageJson =
   WebPageJson { 
