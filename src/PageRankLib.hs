@@ -1,19 +1,21 @@
-{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 
 module PageRankLib
     ( pageRank
     ) where
 
-import Data.Aeson (encode, decode, FromJSON, Object, ToJSON)
-
 import qualified Data.Text as T
-import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
-import Data.List (nub, foldl1')
-import Data.Map (unionWith, fromList, size, Map, empty, filterWithKey, filter, elems, mapWithKey, map, keys)
+import Data.Aeson (encode, decode, FromJSON, ToJSON)
 import Data.Maybe (isNothing, fromJust)
-import GHC.Generics
+import Data.Map (Map, singleton, unionWith, map, filter, keysSet, insert, union, toList, delete, (!), size, mapWithKey, elems)
+import Data.Set (Set, singleton, union, empty, insert, size, toList)
+import Data.List (foldr1)
+
+import GHC.Generics (Generic)
+
+import Data.Map (elemAt)
 
 data WebPageInfoJson = 
   WebPageInfo {
@@ -34,81 +36,97 @@ data PageRankJson =
 instance ToJSON PageRankJson
 instance FromJSON PageRankJson
 
-tuppleToList :: (a, [a]) -> [a]
-tuppleToList (x, xx) = (x:xx)
+first :: ((Set T.Text), Int, Double) -> (Set T.Text)
+first (a, _, _) = a
 
-processJson :: WebPageInfoJson -> Map T.Text ([T.Text], Int)
-processJson json = 
-  let link = urlLink json
-      words = textContentWords json
-      urls = links json
-      forElementInField = Prelude.map (\url -> (url, ([link], 0))) urls
-  in fromList ((link, ([], length words)):forElementInField)
+second :: ((Set T.Text), Int, Double) -> Int
+second (_, b, _) = b
 
-combinePair :: ([T.Text], Int) -> ([T.Text], Int) -> ([T.Text], Int)
-combinePair a b = (fst a ++ fst b, snd a + snd b)
-
-myUnionWith :: Map T.Text ([T.Text], Int) -> Map T.Text ([T.Text], Int) -> Map T.Text ([T.Text], Int)
-myUnionWith a b = unionWith (combinePair) a b
-
-numberOfAllPages :: [(T.Text, ([T.Text], Int))] -> Int
-numberOfAllPages xs = (size . fromList) xs
-
-numberOfAllPages' :: Map T.Text ([T.Text], Int) -> Int
-numberOfAllPages' xs = size xs
+third :: ((Set T.Text), Int, Double) -> Double
+third (_, _, c) = c
 
 decodeWebPageInfoJson :: BB.ByteString -> Maybe WebPageInfoJson
 decodeWebPageInfoJson x = decode x :: Maybe WebPageInfoJson
 
-first :: ([T.Text], Int, Double) -> [T.Text]
-first (a, _, _) = a
+processWebPageInfoJson :: WebPageInfoJson -> Map T.Text ((Set T.Text), Int)
+processWebPageInfoJson json =
+  let link = urlLink json
+      outcomingLinks = links json
+      incomingLinks = Prelude.map (\x -> Data.Map.singleton (x) ((Data.Set.singleton link), 0)) outcomingLinks
+  in if (Prelude.null incomingLinks)
+    then
+      Data.Map.singleton link ((Data.Set.empty), Prelude.length outcomingLinks)
+    else 
+      let parentLink = Data.Map.singleton link ((Data.Set.empty), Prelude.length outcomingLinks)
+          childrenLinks = Data.List.foldr1 (Data.Map.unionWith (myOwnUnionWith)) incomingLinks
+      in Data.Map.unionWith (myOwnUnionWith) childrenLinks parentLink
 
-second :: ([T.Text], Int, Double) -> Int
-second (_, b, _) = b
+myOwnUnionWith :: ((Set T.Text), Int) -> ((Set T.Text), Int) -> ((Set T.Text), Int)
+myOwnUnionWith (aSet, aNumber) (bSet, bNumber) = ((Data.Set.union aSet bSet), (aNumber + bNumber))
 
-third :: ([T.Text], Int, Double) -> Double
-third (_, _, c) = c
+hypotheticalPage :: T.Text
+hypotheticalPage = "hypotheticalPage"
 
-calculateSinglePageRank ::  (T.Text, [T.Text]) -> Map T.Text ([T.Text], Int, Double) -> Int -> Double
-calculateSinglePageRank page pageRanks numberOfPages =
-  let dampingFactor = 0.85
-      firstPart = (1 - dampingFactor) / (fromIntegral numberOfPages)
-      pageUrl = fst page
-      pageIncoming = snd page
-      incomingPages = filterWithKey (\k _ -> elem k pageIncoming) pageRanks
-      incomingPagesElems = elems incomingPages
-      secondPartList = Prelude.map (\x -> (third x) / (fromIntegral (second x))) incomingPagesElems
-      secondPart = (foldl1' (+) secondPartList) * dampingFactor
+solveDanglingLinks :: Map T.Text ((Set T.Text), Int) -> Map T.Text ((Set T.Text), Int)
+solveDanglingLinks graph =
+  let danglingLinks = Data.Map.filter (\x -> (snd x) == 0) graph
+      notDanglingLinks = Data.Map.map (\x -> ((fst x), 1)) danglingLinks
+      notDanglingLinksWithHypotheticalPage = Data.Map.insert hypotheticalPage ((Data.Set.insert hypotheticalPage (keysSet notDanglingLinks)), 1) notDanglingLinks
+  in Data.Map.union notDanglingLinksWithHypotheticalPage graph
 
-  in firstPart + secondPart
+calculatePageRankForAllPages :: Map T.Text ((Set T.Text), Int) -> Map T.Text Double
+calculatePageRankForAllPages graph =
+  let numberOfAllPages = Data.Set.size (Data.Map.keysSet graph)
+      numberOfAllPagesDouble = Prelude.fromIntegral numberOfAllPages
+      zeroPR = (1.0 / (numberOfAllPagesDouble))
+      graphWithPR = Data.Map.map (\x -> ((fst x), (snd x), zeroPR)) graph
 
-calculatePageRanks :: Map T.Text ([T.Text], Int) -> Int -> Int -> Map T.Text ([T.Text], Int, Double)
-calculatePageRanks pageStats numberOfPages numberOfIterations =
-  let oldPageRanks = Data.Map.map (\x -> ((fst x), (snd x), (1.0 / (fromIntegral numberOfPages)))) pageStats
-  in calculatePageRanksIteration numberOfIterations numberOfPages oldPageRanks
+      calculatedPageRank = calculatePageRankForAllPagesTillIteriation 50 dampingFactorNumber graphWithPR
+  in removeHypotheticalPage (Data.Map.map (third) calculatedPageRank)
 
-calculatePageRanksIteration :: Int -> Int -> Map T.Text ([T.Text], Int, Double) -> Map T.Text ([T.Text], Int, Double)
-calculatePageRanksIteration 0 _ oldPageRanks = oldPageRanks
-calculatePageRanksIteration iterations numberOfPages oldPageRanks = 
-  calculatePageRanksIteration (iterations - 1) numberOfPages (mapWithKey (\k v -> ((first v), (second v), (calculateSinglePageRank (k, (first v)) oldPageRanks numberOfPages))) oldPageRanks)
+calculatePageRankForAllPagesTillIteriation :: Int -> Double -> Map T.Text ((Set T.Text), Int, Double) -> Map T.Text ((Set T.Text), Int, Double)
+calculatePageRankForAllPagesTillIteriation 0 _ graph = graph
+calculatePageRankForAllPagesTillIteriation iteration dampingFactor graph =
+  let newGraph = Data.Map.mapWithKey (\key value -> ((first value), (second value), (calculatePageRankForOnePage key value dampingFactor graph))) graph
+      error = errorBetweenOldAndNewPageRank graph newGraph
+  in if (error > 0.00001)
+    then
+      calculatePageRankForAllPagesTillIteriation (iteration - 1) dampingFactor newGraph
+    else newGraph
 
-solveSinks :: Map T.Text ([T.Text], Int) -> Int -> Map T.Text ([T.Text], Int)
-solveSinks pageStats numberOfPages =
-  let sinks = Data.Map.filter (\v -> (snd v) == 0) pageStats
-      sinksUpdated = Data.Map.map (\v -> ((fst v), numberOfPages)) sinks
-      pageStatsSinkOutgoing = unionWith (combinePair) sinksUpdated pageStats
-      sinkKeys = keys sinksUpdated
-  in Data.Map.map (\v -> ( (nub(((fst v) ++ sinkKeys))) , (snd v) ) ) pageStatsSinkOutgoing
+calculatePageRankForOnePage :: T.Text -> ((Set T.Text), Int, Double) -> Double -> Map T.Text ((Set T.Text), Int, Double) -> Double
+calculatePageRankForOnePage key value dampingFactor graph =
+  let incomingLinks = first value
+      outcomingLinksNumber = second value
+      numberOfAllPagesDouble = Prelude.fromIntegral $ Data.Map.size graph
+      incomingLinksPRAndOutcomingLinksNumber = Prelude.map (\x -> pageRankAndOutcomingLinksNumberFromMap x graph) (Data.Set.toList incomingLinks)
+      prDividedByOutcomingLinksNumber = Prelude.map (divideTupple) incomingLinksPRAndOutcomingLinksNumber
+      sumOfPRDividedByOutcomingLinksNumber = Prelude.sum prDividedByOutcomingLinksNumber
+  in ((1.0 - dampingFactor) ) + (sumOfPRDividedByOutcomingLinksNumber * dampingFactor)
+
+pageRankAndOutcomingLinksNumberFromMap :: T.Text -> Map T.Text ((Set T.Text), Int, Double) -> (Double, Double)
+pageRankAndOutcomingLinksNumberFromMap key graph = 
+  let value = graph ! key
+  in ((Prelude.fromIntegral (second value)), (third value))
+
+divideTupple :: (Double, Double) -> Double
+divideTupple (a,b) = b / a
+
+removeHypotheticalPage :: Map T.Text Double -> Map T.Text Double
+removeHypotheticalPage graph = Data.Map.delete hypotheticalPage graph
+
+errorBetweenOldAndNewPageRank :: Map T.Text ((Set T.Text), Int, Double) -> Map T.Text ((Set T.Text), Int, Double) -> Double
+errorBetweenOldAndNewPageRank oldGraph newGraph = 
+  let oldGraphPR = Data.Map.map (third) oldGraph
+      newGraphPR = Data.Map.map (third) newGraph
+      combinedGraph = Data.Map.unionWith (\x y -> (Prelude.abs (x - y))) oldGraphPR newGraphPR
+  in Prelude.sum (Data.Map.elems combinedGraph)
+
+dampingFactorNumber :: Double
+dampingFactorNumber = 0.85
 
 pageRankFileName :: String
 pageRankFileName = "pageRank.txt"
-
-appendPageRankJsonsToFile :: [BB.ByteString] -> IO ()
-appendPageRankJsonsToFile [] = return ()
-appendPageRankJsonsToFile (x:xs) = do
-  BB.appendFile pageRankFileName "\n"
-  BB.appendFile pageRankFileName x
-  appendPageRankJsonsToFile xs
 
 pageRank :: IO ()
 pageRank = do
@@ -116,17 +134,16 @@ pageRank = do
   let jsonList = Prelude.filter (not . BB.null) (BB.lines jsonCollectionFile)
   let jsonDecodedListMaybe = Prelude.map (decodeWebPageInfoJson) jsonList
   let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
-  let processedJsonList = Prelude.map (processJson) jsonDecodedList
-  let pagesStats = foldl (myUnionWith) empty processedJsonList
-  let numberOfPages = numberOfAllPages' pagesStats
-  let pageStatsSinkSolved = solveSinks pagesStats numberOfPages
 
-  let pageRanks = calculatePageRanks pageStatsSinkSolved numberOfPages 10
-  let pageRankJsons = elems $ mapWithKey (\k v -> PageRank k (third v)) pageRanks
-  let encodedPageRankJsons = Prelude.map (Data.Aeson.encode) pageRankJsons
-  let encodedPageRankLinesJsons = Prelude.map (\x -> BB.cons '\n' x) encodedPageRankJsons
-  let toWrite = foldr1 (<>) encodedPageRankLinesJsons
+  let processedJsonList = Prelude.map (processWebPageInfoJson) jsonDecodedList
+  let graphWithDanglingNodes = Data.List.foldr1 (Data.Map.unionWith (myOwnUnionWith)) processedJsonList 
+  let graph = solveDanglingLinks graphWithDanglingNodes
 
-  BB.writeFile pageRankFileName toWrite
+  let pageRankForAllPages = calculatePageRankForAllPages graph
+  let pageRankJsonList = Prelude.map (\(x, y) -> PageRank x y) (Data.Map.toList pageRankForAllPages)
+  let encodedPageRankJsonList = Prelude.map (encode) pageRankJsonList
+  let encodedPageRankToPrint = BB.unlines encodedPageRankJsonList
 
-  print "Finished calculating pageRank!"  
+  BB.writeFile pageRankFileName encodedPageRankToPrint
+
+  print "Finished calculating pageRank!"
