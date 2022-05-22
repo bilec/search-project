@@ -117,8 +117,8 @@ removeHypotheticalPage graph = Data.Map.delete hypotheticalPage graph
 
 errorBetweenOldAndNewPageRank :: Map T.Text ((Set T.Text), Int, Double) -> Map T.Text ((Set T.Text), Int, Double) -> Double
 errorBetweenOldAndNewPageRank oldGraph newGraph = 
-  let oldGraphPR = Data.Map.map (third) oldGraph
-      newGraphPR = Data.Map.map (third) newGraph
+  let oldGraphPR = removeHypotheticalPage (Data.Map.map (third) oldGraph)
+      newGraphPR = removeHypotheticalPage (Data.Map.map (third) newGraph)
       combinedGraph = Data.Map.unionWith (\x y -> (Prelude.abs (x - y))) oldGraphPR newGraphPR
   in Prelude.sum (Data.Map.elems combinedGraph)
 
