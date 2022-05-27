@@ -29,6 +29,7 @@ library
       PageRankLib
       ParseLib
       SearchLib
+      TypeClassesLib
   other-modules:
       Paths_search_project
   hs-source-dirs:
