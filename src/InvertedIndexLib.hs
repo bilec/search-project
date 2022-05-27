@@ -1,11 +1,9 @@
-{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module InvertedIndexLib
-    ( createInvertedIndex
-    ) where
+module InvertedIndexLib (
+  createInvertedIndex
+) where
     
-import Data.Aeson (encode, decode, FromJSON, Object, ToJSON)
-
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
@@ -15,29 +13,8 @@ import Data.List (foldr1)
 import Data.Map (unionWith, Map, keys, singleton)
 import Data.Set (union, Set, singleton, empty)
 import Data.Maybe (isNothing, fromJust)
-import GHC.Generics (Generic)
 
-data WebPageInfoJson = 
-  WebPageInfo {
-    urlLink :: T.Text,
-    textContentWords :: [(T.Text, Int)],
-    links :: [T.Text]
-  } deriving (Show, Generic)
-
-instance ToJSON WebPageInfoJson
-instance FromJSON WebPageInfoJson
-
-data InvertedIndex =
-  InvertedIndex { 
-    index :: Map T.Text (Set T.Text)
-  } deriving (Show, Generic)
-
-instance FromJSON InvertedIndex
-instance ToJSON InvertedIndex
-
-
-decodeWebPageInfoJson :: BB.ByteString -> Maybe WebPageInfoJson
-decodeWebPageInfoJson x = decode x :: Maybe WebPageInfoJson
+import TypeClassesLib (WebPageInfoJson(..), InvertedIndex(..), decodeWebPageInfoJson, encodeInvertedIndex)
 
 getLinks :: WebPageInfoJson -> T.Text
 getLinks json = urlLink json
@@ -75,7 +52,7 @@ createInvertedIndex = do
   let preparedJsonList = Prelude.map (\x -> ((urlLink x), Prelude.map (\y -> fst y) (textContentWords x))) jsonDecodedList
   let linksForWord = foldr1 (unionWith (Data.Set.union)) (Prelude.map (processOneIncoming) preparedJsonList)
   let invertedIndex = InvertedIndex linksForWord
-  let invertedIndexEncoded = encode invertedIndex
+  let invertedIndexEncoded = encodeInvertedIndex invertedIndex
   setLocaleEncoding latin1
 
   BB.writeFile "invertedIndex.txt" invertedIndexEncoded
