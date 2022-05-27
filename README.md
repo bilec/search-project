@@ -25,3 +25,6 @@ pageRank:
  - https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.258.9919&rep=rep1&type=pdf
  - http://cs.brown.edu/courses/cs016/static/files/assignments/projects/GraphHelpSession.pdf
  - https://michaelnielsen.org/blog/using-your-laptop-to-compute-pagerank-for-millions-of-webpages/
+
+## Dataset
+https://www.kaggle.com/datasets/aldebbaran/html-br-collection
