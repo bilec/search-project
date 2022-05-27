@@ -1,41 +1,18 @@
-{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module ParseLib
-    ( parse
-    ) where
+module ParseLib ( 
+  parse
+) where
 
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BB
 
 import Data.List (findIndex, sort, group, nub)
-import Data.Aeson (encode, decode, FromJSON, ToJSON)
 import Data.Maybe (isNothing, fromJust, Maybe(Nothing))
-import GHC.Generics (Generic)
 import Text.HTML.TagSoup (parseTags, innerText, Tag, isTagOpenName, isTagCloseName, isTagText, fromAttrib)
 
-data WebPageJson =
-  WebPageJson { 
-    url :: T.Text,
-    html_content :: T.Text  
-  } deriving (Show, Generic)
-
-instance FromJSON WebPageJson
-instance ToJSON WebPageJson
-
-data WebPageInfoJson = 
-  WebPageInfo {
-    urlLink :: T.Text,
-    textContentWords :: [(T.Text, Int)],
-    links :: [T.Text]
-  } deriving (Show, Generic)
-
-instance FromJSON WebPageInfoJson
-instance ToJSON WebPageInfoJson
-
-
-decodeWebPageJson :: BB.ByteString -> Maybe WebPageJson
-decodeWebPageJson x = decode x :: Maybe WebPageJson
+import TypeClassesLib (WebPageJson(..), WebPageInfoJson(..), decodeWebPageJson, encodeWebPageInfoJson)
 
 checkBody :: [Tag T.Text] -> Bool
 checkBody tags = 
@@ -84,21 +61,21 @@ extractLinks :: [Tag T.Text] -> [T.Text]
 extractLinks tags = nub (filter (\x -> x /= "" && isCorrectUrl x) (map (fromAttrib "href") (filter (isTagOpenName "a") tags)))
 
 processJson :: WebPageJson -> Maybe WebPageInfoJson
-processJson webPageJson = do
+processJson webPageJson =
   let urlLink = url webPageJson
-  let content = html_content webPageJson
-  let contentTags = parseTags content
-  if (not $ checkBody contentTags)
-    then Nothing
-    else 
-      do
+      content = html_content webPageJson
+      contentTags = parseTags content
+  in 
+    if (not $ checkBody contentTags)
+      then Nothing
+      else 
         let body = onlyBody contentTags
-        let bodyWithoutScriptAndStyle = dropScriptAndStyle body
+            bodyWithoutScriptAndStyle = dropScriptAndStyle body
 
-        let bodyWords = group $ sort $ T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
-        let bodyWordsWithOccurrence = map (\x -> (head x, length x)) bodyWords
-        let urlLinks = extractLinks bodyWithoutScriptAndStyle
-        Just $ WebPageInfo urlLink bodyWordsWithOccurrence urlLinks
+            bodyWords = group $ sort $ T.words $ T.strip $ innerText bodyWithoutScriptAndStyle
+            bodyWordsWithOccurrence = map (\x -> (head x, length x)) bodyWords
+            urlLinks = extractLinks bodyWithoutScriptAndStyle
+        in Just $ WebPageInfo urlLink bodyWordsWithOccurrence urlLinks
 
 parse :: IO ()
 parse = do 
@@ -108,9 +85,8 @@ parse = do
   let jsonDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) jsonDecodedListMaybe)
   let processedJsonListMaybe = Prelude.map (processJson) jsonDecodedList
   let processedJsonList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) processedJsonListMaybe)
-  let encodedJsonList = Prelude.map (Data.Aeson.encode) processedJsonList
-  let encodedJsonLinesList = Prelude.map (\x -> BB.cons '\n' x) encodedJsonList
-  let toWrite = foldr1 (<>) encodedJsonLinesList
+  let encodedJsonList = Prelude.map (encodeWebPageInfoJson) processedJsonList
+  let toWrite = BB.unlines encodedJsonList
   
   BB.writeFile "webPageInfo.txt" toWrite
 
