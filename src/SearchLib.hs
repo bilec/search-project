@@ -1,11 +1,9 @@
-{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module SearchLib
-    (search
-    ) where
+module SearchLib (
+  search
+) where
         
-import Data.Aeson (encode, decode, FromJSON, Object, ToJSON)
-
 import qualified Data.ByteString.Lazy.Char8 as BB
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
@@ -14,32 +12,10 @@ import Data.Map (Map, map, member)
 import Data.Set (Set, map, member)
 import Data.List (sortOn)
 import Data.Maybe (fromJust)
-import Data.Text (pack, toLower)
+import Data.Text (pack)
 import Data.Maybe (isNothing, fromJust)
-import GHC.Generics (Generic)
 
-newtype InvertedIndex =
-    InvertedIndex {
-        index :: Map T.Text (Set T.Text)
-    } deriving (Show, Generic)
-
-instance FromJSON InvertedIndex
-instance ToJSON InvertedIndex
-
-data PageRankJson =
-  PageRank {
-    url :: T.Text,
-    pageRankValue :: Double
-  } deriving (Show, Generic)
-
-instance ToJSON PageRankJson
-instance FromJSON PageRankJson
-
-decodeInvertedIndex :: BB.ByteString -> Maybe InvertedIndex
-decodeInvertedIndex x = decode x :: Maybe InvertedIndex
-
-decodePageRankJson :: BB.ByteString -> Maybe PageRankJson
-decodePageRankJson x = decode x :: Maybe PageRankJson
+import TypeClassesLib (InvertedIndex(..), PageRankJson(..), decodeInvertedIndex, decodePageRankJson)
 
 findWord :: T.Text -> Map T.Text (Set T.Text) -> Set T.Text
 findWord word linksList = linksList M.! word
@@ -56,7 +32,7 @@ search = do
     let pageRankList = Prelude.filter (not . BB.null) (BB.lines pageRankFile)
     let pageRankDecodedListMaybe = Prelude.map (decodePageRankJson) pageRankList
     let pageRankDecodedList = Prelude.map (fromJust) (Prelude.filter (not . isNothing) pageRankDecodedListMaybe)
-    let pageRankDecodedAndParsedList = Prelude.map (\x -> ((url x), (pageRankValue x))) pageRankDecodedList
+    let pageRankDecodedAndParsedList = Prelude.map (\x -> ((prUrl x), (pageRankValue x))) pageRankDecodedList
     let pageRankMap = M.fromList pageRankDecodedAndParsedList
     
     print "Please insert text to search:"
