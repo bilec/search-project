@@ -1,40 +1,18 @@
-{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module PageRankLib
-    ( pageRank
-    ) where
+module PageRankLib ( 
+  pageRank
+) where
 
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy.Char8 as BB
 
-import Data.Aeson (encode, decode, FromJSON, ToJSON)
 import Data.Maybe (isNothing, fromJust)
 import Data.Map (Map, singleton, unionWith, map, filter, keysSet, insert, union, toList, delete, (!), size, mapWithKey, elems)
 import Data.Set (Set, singleton, union, empty, insert, size, toList)
 import Data.List (foldr1)
 
-import GHC.Generics (Generic)
-
-import Data.Map (elemAt)
-
-data WebPageInfoJson = 
-  WebPageInfo {
-    urlLink :: T.Text,
-    textContentWords :: [(T.Text, Int)],
-    links :: [T.Text]
-  } deriving (Show, Generic)
-
-instance ToJSON WebPageInfoJson
-instance FromJSON WebPageInfoJson
-
-data PageRankJson =
-  PageRank {
-    url :: T.Text,
-    pageRankValue :: Double
-  } deriving (Show, Generic)
-
-instance ToJSON PageRankJson
-instance FromJSON PageRankJson
+import TypeClassesLib (WebPageInfoJson(..), PageRankJson(..), decodeWebPageInfoJson, encodePageRankJson)
 
 first :: ((Set T.Text), Int, Double) -> (Set T.Text)
 first (a, _, _) = a
@@ -44,9 +22,6 @@ second (_, b, _) = b
 
 third :: ((Set T.Text), Int, Double) -> Double
 third (_, _, c) = c
-
-decodeWebPageInfoJson :: BB.ByteString -> Maybe WebPageInfoJson
-decodeWebPageInfoJson x = decode x :: Maybe WebPageInfoJson
 
 processWebPageInfoJson :: WebPageInfoJson -> Map T.Text ((Set T.Text), Int)
 processWebPageInfoJson json =
@@ -141,7 +116,7 @@ pageRank = do
 
   let pageRankForAllPages = calculatePageRankForAllPages graph
   let pageRankJsonList = Prelude.map (\(x, y) -> PageRank x y) (Data.Map.toList pageRankForAllPages)
-  let encodedPageRankJsonList = Prelude.map (encode) pageRankJsonList
+  let encodedPageRankJsonList = Prelude.map (encodePageRankJson) pageRankJsonList
   let encodedPageRankToPrint = BB.unlines encodedPageRankJsonList
 
   BB.writeFile pageRankFileName encodedPageRankToPrint
