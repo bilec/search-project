@@ -51,7 +51,7 @@ executable search-project-exe
       Paths_search_project
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:
       Unique >=0.4.7.9
     , aeson
