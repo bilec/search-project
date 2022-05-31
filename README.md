@@ -5,6 +5,12 @@ stack build
 stack run 
 ```
 
+## TO-DO
+- [ ] don't load invertedIndex in search
+- [ ] in invertedIndex, sort links here acording to pageRank
+- [ ] each word should have id (number) and inverted index should consist of ids and links
+- [ ] it would be nice if we move all data to in-memory-db (e.g. mongoDB)
+
 ## Requirements
 1. parse - it needs collection.jl file in folder where it is being run
 2. pageRank - it needs webPageInfo.txt file in folder where it is being run
